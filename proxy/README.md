@@ -1,19 +1,27 @@
 # Прокси для AI на Cloudflare Workers (бесплатно)
 
 Зачем он нужен. Приложение «Тендер-Сверка» — статичный сайт на GitHub Pages, своего сервера у него нет.
-Ключ OpenAI нельзя класть в код сайта: его увидит любой посетитель. Прокси — маленькая программа
+AI-ключ нельзя класть в код сайта: его увидит любой посетитель. Прокси — маленькая программа
 на серверах Cloudflare. Ключ хранится у неё в секрете, а браузер отправляет запросы к AI через неё.
 
 ```
-Браузер (GitHub Pages) ──► Cloudflare Worker (ключ в секрете) ──► api.openai.com / api.anthropic.com
+Браузер (GitHub Pages) ──► Cloudflare Worker (ключ в секрете) ──► Google Gemini / OpenAI / Anthropic
 ```
 
 Бесплатного тарифа Cloudflare Workers (100 000 запросов в сутки) для MVP хватает с большим запасом.
 Банковская карта не нужна.
 
+**Полностью бесплатно:** Cloudflare Workers (бесплатно) + Google Gemini (бесплатный тариф AI Studio, без карты).
+OpenAI и Claude — платные (оплата за токены), их можно подключить позже тем же прокси.
+
+> ⚠ На бесплатном тарифе Gemini Google может использовать присланные данные для улучшения своих продуктов.
+> Для демо и тестовых документов это нормально; для реальных конфиденциальных тендеров включите платный тариф
+> (Billing в AI Studio) — тогда данные не используются.
+
 Что делает прокси (`worker.js`):
 
-- принимает только `POST /v1/chat/completions` (OpenAI) и `POST /v1/messages` (Anthropic), всё остальное отклоняет;
+- принимает только `POST /v1/chat/completions` (Gemini/OpenAI) и `POST /v1/messages` (Anthropic), всё остальное отклоняет;
+- если на прокси есть только ключ Gemini, а сайт просит модель OpenAI, — сам переключает запрос на Gemini (`GEMINI_MODEL`, по умолчанию `gemini-3.8-flash`);
 - сам подставляет ключ из секрета, а ключи, присланные браузером, отбрасывает;
 - отвечает только сайтам из списка `ALLOWED_ORIGINS` (CORS);
 - не пропускает запросы больше 20 МБ;
@@ -28,11 +36,14 @@
 2. Подтвердите e-mail по ссылке из письма.
 3. Домен покупать не нужно: воркер получит бесплатный адрес вида `https://<имя>.<ваш-поддомен>.workers.dev`.
 
-## Шаг 2. Ключ OpenAI
+## Шаг 2. Бесплатный ключ Google Gemini
 
-1. Войдите на <https://platform.openai.com/api-keys>, нажмите **Create new secret key** и скопируйте ключ (`sk-...`).
-2. Поставьте лимит расходов: <https://platform.openai.com/settings/organization/limits>
-   (или бюджет проекта). Это главная защита на случай, если адрес прокси узнают посторонние.
+1. Откройте <https://aistudio.google.com/apikey> и войдите Google-аккаунтом (Gmail).
+2. Нажмите **Create API key** (при первом входе примите условия). Скопируйте ключ — он начинается с `AIza...`.
+3. Ничего оплачивать не нужно: ключ сразу работает на бесплатном тарифе (есть лимиты запросов в минуту/сутки — для демо хватает).
+
+*Необязательно, платно:* ключ OpenAI — <https://platform.openai.com/api-keys> (**Create new secret key**, `sk-...`),
+обязательно поставьте лимит расходов: <https://platform.openai.com/settings/organization/limits>.
 
 ## Шаг 3. Создание воркера
 
@@ -45,12 +56,13 @@
 3. Нажмите **Edit code**. Удалите весь код в редакторе, вставьте содержимое файла [`worker.js`](./worker.js) целиком
    и нажмите **Deploy** справа вверху.
 4. Перейдите в **Settings → Variables and Secrets** и нажмите **Add**:
-   - **Type: Secret**, имя `OPENAI_API_KEY`, значение: ваш ключ `sk-...`. Сохраните (**Deploy**).
+   - **Type: Secret**, имя `GEMINI_API_KEY`, значение: ваш ключ `AIza...`. Сохраните (**Deploy**).
+   - если есть платный ключ OpenAI: **Secret** `OPENAI_API_KEY` (`sk-...`);
    - если нужен Claude: ещё один **Secret** `ANTHROPIC_API_KEY`;
    - **Type: Text**, имя `ALLOWED_ORIGINS`, значение: адрес вашего сайта, например
      `https://<user>.github.io,http://localhost:*`. Без этой переменной разрешены все `*.github.io` и localhost;
    - **Type: Text**, имя `ALLOWED_MODELS`, значение, например,
-     `gpt-4.1-mini*,gpt-4.1,gpt-4o-mini*,gpt-5-mini*`. **Без этой переменной разрешены любые модели.**
+     `gemini-*,gpt-4.1-mini*,gpt-4o-mini*`. **Без этой переменной разрешены любые модели.**
 5. Скопируйте адрес воркера со страницы **Overview**, например `https://tender-sverka-proxy.myname.workers.dev`.
 
 ### Способ Б: через командную строку (wrangler)
@@ -61,7 +73,8 @@
 cd proxy
 npx wrangler login                        # откроет браузер для входа в Cloudflare
 npx wrangler deploy                       # создаст воркер по wrangler.toml
-npx wrangler secret put OPENAI_API_KEY    # вставьте ключ, когда попросит
+npx wrangler secret put GEMINI_API_KEY    # вставьте ключ AIza..., когда попросит
+npx wrangler secret put OPENAI_API_KEY    # необязательно (платно)
 npx wrangler secret put ANTHROPIC_API_KEY # необязательно
 ```
 
@@ -73,17 +86,17 @@ npx wrangler secret put ANTHROPIC_API_KEY # необязательно
 Откройте адрес воркера в браузере. Ответ должен быть таким:
 
 ```json
-{"ok":true,"service":"tender-sverka-proxy","openai":true,"anthropic":false}
+{"ok":true,"service":"tender-sverka-proxy","gemini":true,"openai":false,"anthropic":false}
 ```
 
-Если `"openai": false`, секрет `OPENAI_API_KEY` не сохранился: повторите шаг 3.4.
+Если `"gemini": false`, секрет `GEMINI_API_KEY` не сохранился: повторите шаг 3.4.
 
 Проверка запроса к модели из терминала (подставьте свой адрес):
 
 ```bash
 curl -s https://tender-sverka-proxy.myname.workers.dev/v1/chat/completions \
   -H "Origin: http://localhost:5173" -H "Content-Type: application/json" \
-  -d '{"model":"gpt-4.1-mini","messages":[{"role":"user","content":"Скажи OK"}]}'
+  -d '{"model":"gemini-3.8-flash","messages":[{"role":"user","content":"Скажи OK"}]}'
 ```
 
 ## Шаг 5. Подключение к приложению
@@ -94,7 +107,7 @@ curl -s https://tender-sverka-proxy.myname.workers.dev/v1/chat/completions \
   нажмите **New repository variable**, задайте имя `PROXY_URL` и значение: адрес воркера, без `/v1` на конце.
   Затем перезапустите деплой (**Actions → Deploy to GitHub Pages → Run workflow**). Сайт сразу будет работать с AI, ключ вводить не нужно.
 - **Только для себя.** В приложении откройте **Настройки**, оставьте поле «API-ключ» пустым, а в поле
-  «Адрес API / прокси» (baseUrl) вставьте адрес воркера. Провайдер: OpenAI. Модель выберите из разрешённых в `ALLOWED_MODELS`.
+  «Адрес API / прокси» (baseUrl) вставьте адрес воркера. Провайдер: Google Gemini (или OpenAI, если на прокси есть его ключ). Модель — из разрешённых в `ALLOWED_MODELS`.
 
 ## Частые ошибки
 
@@ -102,7 +115,8 @@ curl -s https://tender-sverka-proxy.myname.workers.dev/v1/chat/completions \
 |---|---|
 | `Origin не разрешён: https://...` | Добавьте адрес сайта в `ALLOWED_ORIGINS` (только схема и домен, без пути `/repo/`). |
 | `Модель «gpt-5» запрещена на прокси` | Выберите в настройках разрешённую модель или добавьте её в `ALLOWED_MODELS`. |
-| `На прокси не задан секрет OPENAI_API_KEY` | Добавьте секрет (шаг 3.4) и нажмите Deploy. |
+| `На прокси не задан ни GEMINI_API_KEY, ни OPENAI_API_KEY` | Добавьте секрет (шаг 3.4) и нажмите Deploy. |
+| `429` / `RESOURCE_EXHAUSTED` от Gemini | Превышен бесплатный лимит запросов в минуту — подождите минуту и повторите. |
 | `429` / `insufficient_quota` | Закончился баланс или сработал лимит OpenAI: пополните баланс на platform.openai.com. |
 | Ошибка CORS в консоли браузера | Проверьте, что адрес прокси указан без лишнего пути и что сайт есть в `ALLOWED_ORIGINS`. |
 

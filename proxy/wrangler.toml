@@ -1,7 +1,8 @@
 # Cloudflare Worker — прокси «Тендер-Сверки» к OpenAI / Anthropic.
 # Деплой: cd proxy && npx wrangler deploy
 # Секреты (НЕ пишите ключи в этот файл!):
-#   npx wrangler secret put OPENAI_API_KEY
+#   npx wrangler secret put GEMINI_API_KEY      # бесплатно: https://aistudio.google.com/apikey
+#   npx wrangler secret put OPENAI_API_KEY      # необязательно (платно)
 #   npx wrangler secret put ANTHROPIC_API_KEY   # необязательно
 name = "tender-sverka-proxy"
 main = "worker.js"
@@ -14,4 +15,4 @@ compatibility_date = "2025-09-01"
 # Лучше указать точный адрес своего GitHub Pages: "https://<user>.github.io,http://localhost:*"
 ALLOWED_ORIGINS = "https://*.github.io,http://localhost:*,http://127.0.0.1:*"
 # Разрешённые модели (защита ключа от дорогих моделей). Пусто — любые.
-ALLOWED_MODELS = "gpt-4.1-mini*,gpt-4.1,gpt-4.1-2025-*,gpt-4o-mini*,gpt-5-mini*,claude-haiku-*,claude-sonnet-*"
+ALLOWED_MODELS = "gemini-*,gpt-4.1-mini*,gpt-4.1,gpt-4.1-2025-*,gpt-4o-mini*,gpt-5-mini*,claude-haiku-*,claude-sonnet-*"

@@ -7,14 +7,16 @@ const KEY = 'tender-sverka-settings-v1'
 const BUILD_PROXY = (import.meta.env.VITE_PROXY_URL as string | undefined) ?? ''
 
 export const MODEL_PRESETS: Record<Settings['provider'], string[]> = {
+  // бесплатный тариф Google AI Studio
+  gemini: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'],
   openai: ['gpt-4.1-mini', 'gpt-4.1', 'gpt-4o-mini', 'gpt-4o', 'gpt-5-mini', 'gpt-5'],
   anthropic: ['claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-opus-5-5'],
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  provider: 'openai',
+  provider: 'gemini',
   apiKey: '',
-  model: 'gpt-4.1-mini',
+  model: 'gemini-3.8-flash',
   baseUrl: BUILD_PROXY,
   reviewThreshold: 80,
   weights: { ...DEFAULT_WEIGHTS },

@@ -1,8 +1,10 @@
-// Тендер-Сверка — прокси к OpenAI / Anthropic на Cloudflare Workers (бесплатный тариф).
-// Ключи хранятся как секреты воркера (OPENAI_API_KEY, ANTHROPIC_API_KEY) и никогда не попадают в браузер.
+// Тендер-Сверка — прокси к Google Gemini / OpenAI / Anthropic на Cloudflare Workers (бесплатный тариф).
+// Ключи хранятся как секреты воркера (GEMINI_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY) и никогда не попадают в браузер.
+// GEMINI_API_KEY — бесплатный ключ Google AI Studio: https://aistudio.google.com/apikey
 //
 // Маршруты:
-//   POST /v1/chat/completions → https://api.openai.com/v1/chat/completions   (секрет OPENAI_API_KEY)
+//   POST /v1/chat/completions → Gemini (модели gemini-*, секрет GEMINI_API_KEY) или https://api.openai.com (OPENAI_API_KEY).
+//                               Если задан только один из ключей — модель подменяется на GEMINI_MODEL / OPENAI_MODEL.
 //   POST /v1/messages         → https://api.anthropic.com/v1/messages        (секрет ANTHROPIC_API_KEY)
 //   GET  /                    → проверка состояния (какие ключи настроены), без секретов
 //
@@ -57,7 +59,7 @@ export default {
 
     // Проверка состояния: открыть URL воркера в браузере
     if (request.method === 'GET' && path === '/') {
-      return json(200, { ok: true, service: 'tender-sverka-proxy', openai: !!env.OPENAI_API_KEY, anthropic: !!env.ANTHROPIC_API_KEY }, cors)
+      return json(200, { ok: true, service: 'tender-sverka-proxy', gemini: !!env.GEMINI_API_KEY, openai: !!env.OPENAI_API_KEY, anthropic: !!env.ANTHROPIC_API_KEY }, cors)
     }
 
     const route = ROUTES[path]
@@ -65,33 +67,52 @@ export default {
     if (request.method !== 'POST') return fail(405, 'Method not allowed: только POST', { ...cors, Allow: 'POST, OPTIONS' })
     if (!allowed) return fail(403, `Origin не разрешён: ${origin || '(нет заголовка Origin)'}. Добавьте сайт в переменную ALLOWED_ORIGINS воркера`, cors)
 
-    const key = env[route.secret]
-    if (!key) return fail(500, `На прокси не задан секрет ${route.secret} (Settings → Variables and Secrets)`, cors)
-
     // Ограничение размера тела
     const declared = Number(request.headers.get('Content-Length') || 0)
     if (declared > MAX_BODY) return fail(413, 'Слишком большой запрос (лимит прокси 20 МБ)', cors)
-    const body = await request.arrayBuffer()
+    let body = await request.arrayBuffer()
     if (body.byteLength > MAX_BODY) return fail(413, 'Слишком большой запрос (лимит прокси 20 МБ)', cors)
-
-    // Ограничитель моделей
-    const allowList = list(env.ALLOWED_MODELS)
-    if (allowList.length) {
-      let model = ''
-      try {
-        model = String(JSON.parse(new TextDecoder().decode(body))?.model ?? '')
-      } catch {
-        return fail(400, 'Тело запроса должно быть JSON', cors)
-      }
-      if (!model) return fail(400, 'В запросе не указана модель (model)', cors)
-      if (!allowList.some((p) => wildcard(p).test(model)))
-        return fail(403, `Модель «${model}» запрещена на прокси. Разрешены: ${allowList.join(', ')} (переменная ALLOWED_MODELS)`, cors)
+    let payload
+    try {
+      payload = JSON.parse(new TextDecoder().decode(body))
+    } catch {
+      return fail(400, 'Тело запроса должно быть JSON', cors)
     }
+
+    // Выбор провайдера для /v1/chat/completions: Gemini (бесплатный тариф) или OpenAI — по модели и настроенным ключам
+    let provider = route.provider
+    let key = env[route.secret]
+    if (route.provider === 'openai') {
+      const wantGemini = /^gemini/i.test(String(payload.model ?? ''))
+      if (wantGemini && env.GEMINI_API_KEY) provider = 'gemini'
+      else if (!wantGemini && env.OPENAI_API_KEY) provider = 'openai'
+      else if (env.GEMINI_API_KEY) {
+        // сайт просит модель OpenAI, а на прокси только ключ Gemini — подменяем модель
+        provider = 'gemini'
+        payload.model = env.GEMINI_MODEL || 'gemini-3.8-flash'
+      } else if (env.OPENAI_API_KEY) {
+        payload.model = env.OPENAI_MODEL || 'gpt-4.1-mini'
+      }
+      key = provider === 'gemini' ? env.GEMINI_API_KEY : env.OPENAI_API_KEY
+      if (!key) return fail(500, 'На прокси не задан ни GEMINI_API_KEY, ни OPENAI_API_KEY (Settings → Variables and Secrets)', cors)
+      if (provider === 'gemini') toGemini(payload)
+      body = new TextEncoder().encode(JSON.stringify(payload))
+    } else if (!key) return fail(500, `На прокси не задан секрет ${route.secret} (Settings → Variables and Secrets)`, cors)
+
+    // Ограничитель моделей (по итоговой модели)
+    const model = String(payload.model ?? '')
+    if (!model) return fail(400, 'В запросе не указана модель (model)', cors)
+    const allowList = list(env.ALLOWED_MODELS)
+    if (allowList.length && !allowList.some((p) => wildcard(p).test(model)))
+      return fail(403, `Модель «${model}» запрещена на прокси. Разрешены: ${allowList.join(', ')} (переменная ALLOWED_MODELS)`, cors)
 
     // Заголовки к провайдеру собираются заново: клиентские Authorization / x-api-key отбрасываются
     const headers = new Headers({ 'Content-Type': 'application/json' })
     let target
-    if (route.provider === 'openai') {
+    if (provider === 'gemini') {
+      target = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
+      headers.set('Authorization', `Bearer ${key}`)
+    } else if (provider === 'openai') {
       target = `${(env.OPENAI_BASE_URL || 'https://api.openai.com').replace(/\/+$/, '')}/v1/chat/completions`
       headers.set('Authorization', `Bearer ${key}`)
     } else {
@@ -118,6 +139,25 @@ export default {
     out.set('Access-Control-Expose-Headers', 'retry-after, x-request-id, request-id')
     return new Response(upstream.body, { status: upstream.status, headers: out })
   },
+}
+
+/** Приводит запрос OpenAI к OpenAI-совместимому слою Gemini: max_tokens, без seed и json_object (JSON просим в тексте). */
+function toGemini(p) {
+  if (p.max_completion_tokens && !p.max_tokens) p.max_tokens = Math.min(p.max_completion_tokens, 65536)
+  delete p.max_completion_tokens
+  delete p.seed
+  if (p.response_format?.type === 'json_object') {
+    delete p.response_format
+    const last = [...(p.messages ?? [])].reverse().find((m) => m.role === 'user')
+    const hint = '\n\nОтветь строго одним JSON-объектом без пояснений и без markdown.'
+    if (last && typeof last.content === 'string') last.content += hint
+    else if (last && Array.isArray(last.content)) {
+      const part = last.content.find((c) => c.type === 'text')
+      if (part) part.text += hint
+    }
+  }
+  p.reasoning_effort = 'low'
+  if (p.temperature === undefined) p.temperature = 0
 }
 
 function list(v) {

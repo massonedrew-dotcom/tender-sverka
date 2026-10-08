@@ -1,4 +1,4 @@
-// Обращение к LLM прямо из браузера: OpenAI (или совместимый прокси) и Anthropic Claude
+// Обращение к LLM прямо из браузера: OpenAI (или совместимый прокси), Google Gemini (OpenAI-совместимый API) и Anthropic Claude
 import type { Settings } from '../types'
 
 export interface LLMRequest {
@@ -29,6 +29,7 @@ function maxOutput(model: string, wanted: number): number {
   else if (/^gpt-5/.test(m)) cap = 128000
   else if (/^o\d/.test(m)) cap = 100000
   else if (/^claude/.test(m)) cap = 64000
+  else if (/^gemini/.test(m)) cap = 65536
   return Math.min(wanted, cap)
 }
 
@@ -42,27 +43,43 @@ function fatal(msg: string): LLMError {
 const TRUNCATED =
   'Ответ модели обрезан по лимиту токенов — фрагмент слишком большой для одного запроса. Уменьшите пакет или выберите модель с большим лимитом вывода'
 
+export const isGemini = (model: string) => /^gemini/i.test(model)
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/openai'
+const JSON_HINT = '\n\nОтветь строго одним JSON-объектом без пояснений и без markdown.'
+
 async function callOpenAI(s: Settings, req: LLMRequest): Promise<string> {
+  const gemini = isGemini(s.model)
   const base = (s.baseUrl || 'https://api.openai.com').replace(/\/+$/, '')
-  const url = /\/v1$/.test(base) ? `${base}/chat/completions` : `${base}/v1/chat/completions`
+  // Gemini напрямую — свой OpenAI-совместимый адрес; через прокси — общий путь /v1/chat/completions
+  const url =
+    gemini && !s.baseUrl ? `${GEMINI_BASE}/chat/completions` : /\/v1$/.test(base) ? `${base}/chat/completions` : `${base}/v1/chat/completions`
+  const userText = gemini && req.json ? req.user + JSON_HINT : req.user
   const content: unknown = req.images?.length
-    ? [{ type: 'text', text: req.user }, ...req.images.map((u) => ({ type: 'image_url', image_url: { url: u, detail: 'high' } }))]
-    : req.user
+    ? [{ type: 'text', text: userText }, ...req.images.map((u) => ({ type: 'image_url', image_url: { url: u, detail: 'high' } }))]
+    : userText
   const body: Record<string, unknown> = {
     model: s.model,
     messages: [
       { role: 'system', content: req.system },
       { role: 'user', content },
     ],
-    max_completion_tokens: maxOutput(s.model, req.maxTokens ?? 16000),
   }
-  if (isReasoningModel(s.model)) body.reasoning_effort = 'low'
-  else {
-    // воспроизводимость (ТЗ 10): детерминированная выборка
+  const maxTokens = maxOutput(s.model, req.maxTokens ?? 16000)
+  if (gemini) {
+    // OpenAI-совместимый слой Gemini: max_tokens, без seed и json_object (JSON требуем в промпте)
+    body.max_tokens = maxTokens
     body.temperature = 0
-    body.seed = 42
+    body.reasoning_effort = 'low'
+  } else {
+    body.max_completion_tokens = maxTokens
+    if (isReasoningModel(s.model)) body.reasoning_effort = 'low'
+    else {
+      // воспроизводимость (ТЗ 10): детерминированная выборка
+      body.temperature = 0
+      body.seed = 42
+    }
+    if (req.json) body.response_format = { type: 'json_object' }
   }
-  if (req.json) body.response_format = { type: 'json_object' }
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (s.apiKey) headers.Authorization = `Bearer ${s.apiKey}`
   const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: req.signal })
@@ -130,7 +147,7 @@ export async function callLLM(s: Settings, req: LLMRequest): Promise<string> {
   let last: unknown
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
-      return s.provider === 'anthropic' ? await callAnthropic(s, req) : await callOpenAI(s, req)
+      return s.provider === 'anthropic' && !isGemini(s.model) ? await callAnthropic(s, req) : await callOpenAI(s, req)
     } catch (e) {
       last = e
       const st = (e as { status?: number }).status

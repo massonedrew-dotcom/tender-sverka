@@ -188,7 +188,7 @@ export interface Project {
 }
 
 export interface Settings {
-  provider: 'openai' | 'anthropic'
+  provider: 'gemini' | 'openai' | 'anthropic'
   apiKey: string
   model: string
   baseUrl: string

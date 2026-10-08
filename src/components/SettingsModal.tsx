@@ -62,6 +62,7 @@ export function SettingsModal({ settings, onSave, onClose }: { settings: Setting
                 const provider = e.target.value as Settings['provider']
                 setS({ ...s, provider, model: MODEL_PRESETS[provider][0] })
               }}>
+                <option value="gemini">Google Gemini — {t('freeTier')}</option>
                 <option value="openai">OpenAI (ChatGPT)</option>
                 <option value="anthropic">Anthropic (Claude)</option>
               </select>
@@ -74,8 +75,14 @@ export function SettingsModal({ settings, onSave, onClose }: { settings: Setting
           </div>
           <div className="mt-3">
             <label className={lbl}>{t('apiKey')}</label>
-            <input className={inp} type="password" autoComplete="off" placeholder={s.provider === 'openai' ? 'sk-…' : 'sk-ant-…'} value={s.apiKey} onChange={(e) => setS({ ...s, apiKey: e.target.value.trim() })} />
+            <input className={inp} type="password" autoComplete="off" placeholder={{ gemini: 'AIza…', openai: 'sk-…', anthropic: 'sk-ant-…' }[s.provider]} value={s.apiKey} onChange={(e) => setS({ ...s, apiKey: e.target.value.trim() })} />
             <p className="mt-1 text-xs text-slate-500">{t('apiKeyHint')}</p>
+            {s.provider === 'gemini' && (
+              <p className="mt-1 text-xs text-slate-500">
+                {t('geminiKeyHint')}{' '}
+                <a className="text-blue-700 underline" href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a>
+              </p>
+            )}
           </div>
           <div className="mt-3">
             <label className={lbl}>{t('baseUrl')}</label>
