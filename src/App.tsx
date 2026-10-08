@@ -86,7 +86,12 @@ export default function App() {
     if (projRef.current?.id === id) return
     let cancelled = false
     getProject(id)
-      .then((p) => {
+      .then(async (p) => {
+        // Прямая ссылка на демо у нового посетителя: создаём демо-проект на лету
+        if (!p && id === DEMO_ID) {
+          p = buildDemoProject(loadSettings())
+          await putProject(p)
+        }
         if (cancelled) return
         if (!p) return setMissingId(id)
         projRef.current = p
