@@ -1,0 +1,250 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+}
+
+/* ---------- База ---------- */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv11', 'ss01';
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply min-h-screen bg-slate-50 font-sans text-[15px] leading-normal text-slate-900;
+    overflow-x: hidden;
+  }
+  h1, h2, h3, h4 {
+    @apply tracking-tight text-slate-900;
+  }
+  ::selection {
+    @apply bg-blue-200 text-slate-900;
+  }
+  /* Кнопки и ссылки — курсор-указатель (Tailwind v4 по умолчанию ставит default) */
+  button:not(:disabled), [role='button']:not([aria-disabled='true']), summary, select, label[for] {
+    cursor: pointer;
+  }
+  /* Видимый фокус только для клавиатуры */
+  :focus-visible {
+    outline: 2px solid var(--color-blue-600);
+    outline-offset: 2px;
+  }
+  input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--color-blue-500);
+    outline-offset: 0;
+  }
+  /* Числа в таблицах и показателях — одинаковой ширины */
+  table, .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  mark {
+    @apply text-inherit;
+  }
+}
+
+/* ---------- Скроллбары ---------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-slate-300) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--color-slate-300);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-slate-400);
+}
+
+/* ---------- Анимации и утилиты ---------- */
+
+/* Неопределённый прогресс: <div class="progress-indeterminate" role="progressbar" /> — полоса 4px, бегущий сегмент */
+.progress-indeterminate {
+  position: relative;
+  height: 4px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--color-blue-100);
+}
+.progress-indeterminate::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  border-radius: inherit;
+  background: var(--color-blue-600);
+  animation: progress-slide 1.3s ease-in-out infinite;
+}
+@keyframes progress-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+
+/* Плавное появление блока (панели, карточки, модалки) */
+.anim-fade-in {
+  animation: fade-in 0.18s ease-out both;
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* Появление со сдвигом вверх — для модальных окон, тостов */
+.anim-pop {
+  animation: pop-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Скелетон-заглушка при загрузке: <div class="skeleton h-4 w-40" /> */
+.skeleton {
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--color-slate-100) 25%, var(--color-slate-200) 37%, var(--color-slate-100) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+/* Кратковременная подсветка строки (например, после перехода к пункту) */
+.anim-flash {
+  animation: flash-bg 1.6s ease-out;
+}
+@keyframes flash-bg {
+  0%, 30% { background-color: var(--color-yellow-100); }
+  100% { background-color: transparent; }
+}
+
+/* Пульсирующая точка «идёт обработка» */
+.dot-pulse {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-blue-600);
+}
+.dot-pulse::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: inherit;
+  animation: dot-ping 1.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes dot-ping {
+  75%, 100% { transform: scale(2.4); opacity: 0; }
+}
+
+/* Узор сетки для hero-блока */
+.bg-grid-faint {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Скрыть полосу прокрутки у горизонтальных лент (фильтры, степпер), прокрутка остаётся */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------- Печать ---------- */
+/* На экране отчёт для печати скрыт; при печати показывается только он */
+.print-report {
+  display: none;
+}
+
+@page {
+  size: A4;
+  margin: 14mm 12mm 16mm;
+}
+
+@media print {
+  html, body {
+    background: #fff !important;
+    color: #0f172a;
+    font-size: 10.5pt;
+    line-height: 1.45;
+  }
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .app,
+  .no-print {
+    display: none !important;
+  }
+  .print-report {
+    display: block !important;
+  }
+
+  /* Таблицы: шапка повторяется на каждой странице, строки не разрываются */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    page-break-inside: auto;
+  }
+  thead {
+    display: table-header-group;
+  }
+  tfoot {
+    display: table-footer-group;
+  }
+  tr, td, th {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  h1, h2, h3, h4 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  p, li {
+    orphans: 3;
+    widows: 3;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* Утилиты для отчёта */
+  .print-break-before {
+    break-before: page;
+    page-break-before: always;
+  }
+  .print-avoid-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

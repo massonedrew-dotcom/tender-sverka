@@ -1,0 +1,37 @@
+{
+  "name": "tenderai",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "test": "node scripts/selftest.mjs"
+  },
+  "dependencies": {
+    "docx": "^9.9.0",
+    "idb-keyval": "^6.3.0",
+    "jszip": "^3.10.2",
+    "mammoth": "^1.13.0",
+    "pdfjs-dist": "^6.4.299",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "oxlint": "^1.81.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0"
+  },
+  "engines": {
+    "node": ">=22.18"
+  }
+}
