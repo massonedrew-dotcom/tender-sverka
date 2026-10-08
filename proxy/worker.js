@@ -123,11 +123,20 @@ export default {
       if (beta) headers.set('anthropic-beta', beta)
     }
 
+    // Gemini: при перегрузке (503) или лимите (429) модели пробуем запасные бесплатные модели
+    const fallbacks = provider === 'gemini' ? list(env.GEMINI_FALLBACKS || 'gemini-3.5-flash,gemini-3.7-flash,gemini-3.6-flash').filter((m) => m !== model) : []
     let upstream
-    try {
-      upstream = await fetch(target, { method: 'POST', headers, body })
-    } catch (e) {
-      return fail(502, `Провайдер недоступен: ${e instanceof Error ? e.message : String(e)}`, cors)
+    for (const m of [model, ...fallbacks]) {
+      if (m !== model) {
+        payload.model = m
+        body = new TextEncoder().encode(JSON.stringify(payload))
+      }
+      try {
+        upstream = await fetch(target, { method: 'POST', headers, body })
+      } catch (e) {
+        return fail(502, `Провайдер недоступен: ${e instanceof Error ? e.message : String(e)}`, cors)
+      }
+      if (upstream.status !== 503 && upstream.status !== 429) break
     }
 
     const out = new Headers(cors)

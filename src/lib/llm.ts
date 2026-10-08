@@ -142,18 +142,24 @@ async function httpError(res: Response): Promise<LLMError> {
   return e
 }
 
+/** Запасные бесплатные модели Gemini: при перегрузке (503) или лимите (429) пробуем следующую. */
+export const GEMINI_FALLBACKS = ['gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-3.6-flash']
+
 export async function callLLM(s: Settings, req: LLMRequest): Promise<string> {
   if (!s.apiKey && !s.baseUrl) throw new LLMError('Не задан API-ключ или адрес прокси (Настройки)')
+  const models = isGemini(s.model) ? [s.model, ...GEMINI_FALLBACKS.filter((m) => m !== s.model)] : [s.model]
   let last: unknown
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const cur = { ...s, model: models[attempt % models.length] }
     try {
-      return s.provider === 'anthropic' && !isGemini(s.model) ? await callAnthropic(s, req) : await callOpenAI(s, req)
+      return cur.provider === 'anthropic' && !isGemini(cur.model) ? await callAnthropic(cur, req) : await callOpenAI(cur, req)
     } catch (e) {
       last = e
       const st = (e as { status?: number }).status
       if (req.signal?.aborted) throw e
       if (st && st !== 429 && st < 500) throw e
-      await sleep(1500 * 2 ** attempt)
+      // у Gemini сразу пробуем другую модель, у остальных — пауза с нарастанием
+      await sleep(models.length > 1 ? 800 : 1500 * 2 ** attempt)
     }
   }
   throw last
